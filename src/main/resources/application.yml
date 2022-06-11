@@ -10,3 +10,10 @@ kafka:
 
 mongodb:
   uri: mongodb://localhost:27017/vendas
+
+consul:
+  client:
+    registration:
+      enabled: true
+    default-zone:
+      - localhost:8500
