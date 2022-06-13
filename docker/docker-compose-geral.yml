@@ -9,18 +9,8 @@ services:
       - '27017:27017'
     environment:
       MONGO_INITDB_DATABASE: vendas
-
-  mongo-express:
-    container_name: mongo-express
-    image: mongo-express
-    depends_on:
-      - relatorio-db
-    ports:
-      - '9090:8081'
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: relatorio-db
-      ME_CONFIG_MONGODB_ADMINPASSWORD: relatorio-db
-      ME_CONFIG_MONGODB_URL: mongodb://relatorio-db:relatorio-db@relatorio-db:27017/
+    networks:
+      - ms-network
 
   zookeeper:
     container_name: zookeeper
@@ -29,6 +19,8 @@ services:
       - '2181:2181'
     environment:
       - ALLOW_ANONYMOUS_LOGIN=yes
+    networks:
+      - ms-network
 
   kafka:
     container_name: kafka
@@ -38,11 +30,13 @@ services:
     environment:
       - KAFKA_BROKER_ID=1
       - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
       - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
       - ALLOW_PLAINTEXT_LISTENER=yes
     depends_on:
       - zookeeper
+    networks:
+      - ms-network
 
   loja-redis:
     container_name: loja-redis
@@ -50,6 +44,8 @@ services:
     command: redis-server --requirepass lojaService
     ports:
       - "6379:6379"
+    networks:
+      - ms-network
 
   veiculo-db:
     container_name: veiculo-db
@@ -60,6 +56,8 @@ services:
       POSTGRES_USER: veiculodb
       POSTGRES_DB: veiculodb
       POSTGRES_PASSWORD: veiculodb
+    networks:
+      - ms-network
 
   consul:
     container_name: consul
@@ -71,3 +69,81 @@ services:
       - '8500:8500'
       - '8600:8600'
       - '8600:8600/udp'
+    networks:
+      - ms-network
+
+  relatorio-service:
+    container_name: relatorio-service
+    image: relatorio-service
+    environment:
+      DATASOURCE_HOST: relatorio-db
+      DATASOURCE_PORT: 27017
+      CONSUL_DEFAULT_ZONE: consul
+      CONSUL_PORT: 8500
+      CONSUL_ENABLED: true
+      KAFKA_SERVER: kafka
+      KAFKA_PORT: 9092
+    depends_on:
+      - relatorio-db
+      - kafka
+      - consul
+    ports:
+      - "8082:8082"
+    networks:
+      - ms-network
+
+  veiculo-service:
+    container_name: veiculo-service
+    image: veiculo-service
+    environment:
+      DATASOURCE_HOST: veiculo-db
+      DATASOURCE_PORT: 5432
+      CONSUL_DEFAULT_ZONE: consul
+      CONSUL_PORT: 8500
+    depends_on:
+      - veiculo-db
+      - consul
+    ports:
+      - "8080:8080"
+    networks:
+      - ms-network
+
+  loja-service:
+    container_name: loja-service
+    image: loja-service
+    environment:
+      REDIS_URI: loja-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: lojaService
+      KAFKA_SERVER: kafka
+      KAFKA_PORT: 9092
+      CONSUL_DEFAULT_ZONE: consul
+      CONSUL_PORT: 8500
+      CONSUL_ENABLED: true
+    depends_on:
+      - loja-redis
+      - kafka
+      - consul
+    ports:
+      - "8081:8081"
+    links:
+      - kafka
+    networks:
+      - ms-network
+
+  gateway-api:
+    container_name: gateway-api
+    image: gateway-api
+    environment:
+      CONSUL_DEFAULT_ZONE: consul
+      CONSUL_PORT: 8500
+    depends_on:
+      - consul
+    ports:
+      - "9999:9999"
+    networks:
+      - ms-network
+
+networks:
+  ms-network:
+    driver: bridge
